@@ -1,5 +1,7 @@
 package src.restaurants;
 
+import java.io.IOException;
+
 import org.json.simple.JSONObject;
 
 import jade.core.AID;
@@ -24,7 +26,7 @@ public class Restaurant extends Agent {
 	
 	protected void setup() {
 		quality = Math.random()* Main.EvaluateRange;
-		capacity = (int)(Math.random() * Main.MaxCapacity);
+		capacity = 10;//(int)(10 + Math.random() * (Main.MaxCapacity - 10));
 		fullness = 0;
 		
 		DFAgentDescription dfd = new DFAgentDescription();
@@ -53,7 +55,11 @@ public class Restaurant extends Agent {
 		
 		ACLMessage JSONmsg = new ACLMessage(ACLMessage.CONFIRM);
 		JSONmsg.addReceiver(global);
-		JSONmsg.setContent(Encode().toJSONString());
+		try {
+			JSONmsg.setContentObject(Encode());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 		send(JSONmsg);
 		
 		addBehaviour(new RestaurantReceiver());

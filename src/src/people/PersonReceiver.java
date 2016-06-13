@@ -1,5 +1,6 @@
 package src.people;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.TreeMap;
@@ -21,44 +22,32 @@ import src.mas_lab.Main;
 
 public class PersonReceiver extends CyclicBehaviour {
 
+		
 	AID currentTarget;
 	int maxReceivers;
 	int arrived;
 	TreeMap<AID, Double> free;
 	Vector<AID> receivers;
+	Vector<AID> fullRestaurants;
 	
 	static AID global;
+	
+	boolean choosing;
+	
 	
 	public PersonReceiver(Agent a) {
 		super(a);
 		free = new TreeMap<AID, Double>();
 		receivers = new Vector<AID>();
+		fullRestaurants = new Vector<AID>();
+		choosing = false;
 		if (global == null){
 			global = getGlobal();
 		}
 	}
-
-	/*public PersonReceiver(Agent a) {
-		super(a);
-		// TODO Auto-generated constructor stub
-	}*/
 	
-	void setupFriends() {
-		//System.out.println(myAgent.getLocalName() + " is chosing friends");
-		
-		DFAgentDescription pdfd = new DFAgentDescription();
-		ServiceDescription psd = new ServiceDescription();
-		psd.setType("Person");
-		pdfd.addServices(psd);
-		
-		
-		DFAgentDescription[] presults = new DFAgentDescription[0];	
-		try {
-			presults = DFService.search(myAgent, pdfd);	
-		} catch (FIPAException e) {
-			e.printStackTrace();
-		}
-		
+	void setupFriends(DFAgentDescription[] presults) {
+			
 		Vector<AID> results = new Vector<AID>();
 		
 		for (int i = 0; i < presults.length; i++) {
@@ -77,87 +66,85 @@ public class PersonReceiver extends CyclicBehaviour {
 			if(results.size() == 0)
 				break;
 		}
-		
-		//System.out.println(((Person)myAgent).friends.toString());
 	}
 
 	@Override
 	public void action() {
 		ACLMessage msg = myAgent.receive();
 		if (msg == null) {
-			//System.out.println("Receive loop");
 			block();
 		} else {
 			switch (msg.getPerformative()) {
 				case (ACLMessage.REFUSE):{
-					//System.out.println("Received refuse");
 					if(receivers.contains(msg.getSender())){
 						arrived++;
 						receivers.remove(msg.getSender());
 					}
-					if(arrived == maxReceivers)
+					if(arrived == maxReceivers & !choosing){
 						myAgent.addBehaviour(new Chose(this, free));
+						choosing = true;
+					}
 					break;
 				}
 				case (ACLMessage.PROPOSE):{
-					//System.out.println("Received propose");
 					if(receivers.contains(msg.getSender())){
 						arrived++;
 						receivers.remove(msg.getSender());
 						free.put(msg.getSender(), ((Person)myAgent).restMap.get(msg.getSender()));
-						/*if(Math.random() < Main.RandomGoToFirst & arrived == 1){
-							receivers.clear();
-							setCurrentTarget(msg.getSender());
-							myAgent.addBehaviour(new Eat(currentTarget));
-							System.err.println("!!Too lazy to wait!!");
-						}*/
 					}
-					if(arrived == maxReceivers)
+					if(arrived == maxReceivers & !choosing){
 						myAgent.addBehaviour(new Chose(this, free));
+						choosing = true;
+					}
 					break;
 				}
 				case (ACLMessage.INFORM):{
-					//System.out.println("Received inform from " + msg.getSender());
-					//System.out.println(currentTarget);
-					
 					if(msg.getSender().equals(currentTarget)){
-						//System.out.println("Starting evaluation");
-						myAgent.addBehaviour(new Evaluate(myAgent, Double.parseDouble(msg.getContent()),currentTarget, this));
+						myAgent.addBehaviour(new Evaluate(myAgent, Double.parseDouble(msg.getContent()),currentTarget));
 						Reset();
-						
+						fullRestaurants.clear();
 					}
 					
-					//System.out.println("Received inform");
 					if(msg.getOntology().equals("Reviews")){
-						//System.out.println("received opinion");
 						Hashtable<AID, Double> map = new Hashtable<AID, Double>();
 						try {
 							map = (Hashtable<AID, Double>)msg.getContentObject();
 						} catch(UnreadableException e) {
 							e.printStackTrace();
 						}
-						myAgent.addBehaviour(new UpdateEvaluation(map, msg.getSender()));						
+						myAgent.addBehaviour(new UpdateEvaluation(myAgent, map, msg.getSender()));						
 					}
 					break;
 				}
 				case (ACLMessage.FAILURE):{
-					//System.out.println("Received failure");
 					if(msg.getSender().equals(currentTarget)){
-						myAgent.addBehaviour(new Search(this));
+						System.err.println(myAgent.getLocalName() + ": Received Failure");
+						fullRestaurants.add(currentTarget);
 						Reset();
+						myAgent.addBehaviour(new Search(this, fullRestaurants));
 					}
 					break;
 				}
 				case (ACLMessage.CONFIRM):{
-					if(Integer.decode(msg.getContent()) == 1 & !((Person)myAgent).fromFile){
-						setupFriends();
+					if(msg.getOntology().equals("Init Phase")){
+						if(!((Person)myAgent).fromFile)
+							try {
+								setupFriends((DFAgentDescription[])msg.getContentObject());
+							} catch (UnreadableException e1) {
+								e1.printStackTrace();
+							}
+						ACLMessage JSONmsg = new ACLMessage(ACLMessage.CONFIRM);
+						JSONmsg.addReceiver(global);
+						try {
+							JSONmsg.setContentObject(((Person)myAgent).Encode());
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+						myAgent.send(JSONmsg);
 					}
-					//System.out.println(myAgent.getLocalName() + "\n" +((Person)myAgent).Encode());
-					ACLMessage JSONmsg = new ACLMessage(ACLMessage.CONFIRM);
-					JSONmsg.addReceiver(global);
-					JSONmsg.setContent(((Person)myAgent).Encode().toJSONString());
-					myAgent.send(JSONmsg);
-					myAgent.addBehaviour(new Search(this));
+					else if(msg.getOntology().equals("New Turn")){
+						myAgent.addBehaviour(new Search(this, fullRestaurants));
+					}
 					break;
 				}
 				default:
@@ -167,6 +154,7 @@ public class PersonReceiver extends CyclicBehaviour {
 	}
 	
 	public void Reset() {
+		choosing = false;
 		currentTarget = null;
 		maxReceivers  = 0;
 		receivers.clear();
@@ -176,8 +164,6 @@ public class PersonReceiver extends CyclicBehaviour {
 
 	public void setCurrentTarget(AID currentTarget) {
 		this.currentTarget = currentTarget;
-		//System.out.println("Current target: " + this.currentTarget.getLocalName());
-		//ACLMessage msg = new ACLMessage(ACLMessage.);
 	}
 
 	public void setReceivers(Vector<AID> receivers) {
@@ -193,7 +179,6 @@ public class PersonReceiver extends CyclicBehaviour {
 		dfd.addServices(sd);
 		try {
 			AID gAID = DFService.search(myAgent, dfd)[0].getName();
-			//System.out.println(gAID.getName());
 			return gAID;
 		} catch (FIPAException e){
 			e.printStackTrace();

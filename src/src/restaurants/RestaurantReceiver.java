@@ -1,5 +1,8 @@
 package src.restaurants;
 
+import java.util.Vector;
+
+import jade.core.AID;
 import jade.core.Agent;
 import jade.core.behaviours.Behaviour;
 import jade.core.behaviours.CyclicBehaviour;
@@ -7,52 +10,53 @@ import jade.lang.acl.ACLMessage;
  
 public class RestaurantReceiver extends CyclicBehaviour {
 
-	public RestaurantReceiver() {}
-
-	public RestaurantReceiver(Agent a) {
-		super(a);
-		// TODO Auto-generated constructor stub
+	Vector<AID> booked;
+	
+	public RestaurantReceiver() {
+		booked = new Vector<AID>();
 	}
 
 	@Override
 	public void action() {
 		ACLMessage msg = myAgent.receive();
 		if (msg == null) {
-			//myAgent.addBehaviour(this);
 			block();
 		} else {
 			switch (msg.getPerformative()){
 				case ACLMessage.REQUEST:{
 					if(((Restaurant)myAgent).isFree()){
 						myAgent.addBehaviour(new RestaurantSender(ACLMessage.PROPOSE, msg.getSender()));
-						//System.out.println("Sending restaurant proposal");
 						block();
 					} else {
 						myAgent.addBehaviour(new RestaurantSender(ACLMessage.REFUSE, msg.getSender()));
-						//System.out.println("Sending restaurant proposal");
 						block();
 					}
 					break;
 				}
 				case ACLMessage.ACCEPT_PROPOSAL:{
-					if(((Restaurant)myAgent).isFree()){
+					if(((Restaurant)myAgent).isFree() & !booked.contains(msg.getSender())){
 						myAgent.addBehaviour(new RestaurantSender(ACLMessage.INFORM, msg.getSender(), true));
-						//System.out.println("Sending restaurant inform");
 						((Restaurant)myAgent).fullness++;
+						booked.add(msg.getSender());
 						block();
 					} else {
+						if(booked.contains(msg.getSender()))
+							System.err.println(myAgent.getLocalName() + ": Received double booking from " 
+												+ msg.getSender().getLocalName());
 						myAgent.addBehaviour(new RestaurantSender(ACLMessage.FAILURE, msg.getSender()));
-						//System.out.println("Sending restaurant failure");
 						block();
 					}
 					break;
 				}
 				case ACLMessage.CONFIRM:{
-					((Restaurant)myAgent).fullness = 0;
+					if(msg.getOntology().equals("Restaurant Reset")){
+						((Restaurant)myAgent).fullness = 0;
+						booked.clear();
+						myAgent.addBehaviour(new RestaurantSender(ACLMessage.PROPAGATE, msg.getSender()));
+					}
 					break;
 				}
 				default: {
-					//myAgent.addBehaviour(this);
 					block();
 				}
 					
@@ -60,11 +64,4 @@ public class RestaurantReceiver extends CyclicBehaviour {
 		}
 
 	}
-
-	/*@Override
-	public boolean done() {
-		// TODO Auto-generated method stub
-		return false;
-	}*/
-
 }
