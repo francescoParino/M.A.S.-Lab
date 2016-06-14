@@ -18,8 +18,7 @@ public class Evaluate extends OneShotBehaviour {
 
 	AID place;
 	double quality;
-	PersonReceiver receiver;
-
+	
 	static AID global;
 
 	public Evaluate(Agent a, AID place) {
@@ -31,11 +30,10 @@ public class Evaluate extends OneShotBehaviour {
 		}
 	}
 
-	public Evaluate(Agent a, double quality, AID place, PersonReceiver receiver) {
+	public Evaluate(Agent a, double quality, AID place) {
 		myAgent = a;
 		this.quality = quality;
 		this.place = place;
-		this.receiver = receiver;
 
 		if (global == null) {
 			global = getGlobal();
@@ -54,11 +52,6 @@ public class Evaluate extends OneShotBehaviour {
 			e.printStackTrace();
 			return null;
 		}
-	}
-
-	public Evaluate(Agent a) {
-		super(a);
-		// TODO Auto-generated constructor stub
 	}
 
 	@Override
@@ -81,25 +74,16 @@ public class Evaluate extends OneShotBehaviour {
 	
 			((Person) myAgent).restMap.put(place, think);
 	
-			// System.out.println("Now I, " + myAgent.getLocalName()
-			// + ", think of " + place.getLocalName()
-			// + " this: " +(think));
 	
 			// Mappa locale di tutte le persone che mi hanno parlato di place (bene
 			// o male)
 			Hashtable<AID, Double> map = ((Person) myAgent).opinions.get(place);
 			for (AID person : map.keySet()) {
 				double myTrust = ((Person) myAgent).worldTrust.get(person);
-				// System.err.println("I, " + myAgent.getLocalName() + ", thought of
-				// " + person.getLocalName()
-				// + " this: " + myTrust);
 				double difference = Math.abs(think - map.get(person)) / Main.EvaluateRange;
 				double newTrust = 1 - difference;
 				myTrust = 0.5 * (myTrust + newTrust);
 				((Person) myAgent).worldTrust.put(person, myTrust);
-				// System.err.println("Now I, " + myAgent.getLocalName() + ", think
-				// of " + person.getLocalName()
-				// + " this: " + myTrust);
 			}
 	
 			ACLMessage msg2 = new ACLMessage(ACLMessage.INFORM);
